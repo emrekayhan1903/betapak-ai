@@ -10,22 +10,25 @@ import uvicorn
 
 app = FastAPI(title="BetaPak AI Teknik Asistan")
 
-# API Anahtarı ve Gemini Client (Cevap üretmek için)
 API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=API_KEY)
 
-# ChromaDB Bağlantısı
 CHROMA_DATA_PATH = "./chroma_db"
 COLLECTION_NAME = "makine_kilavuzlari"
+
+# Global değişkenler
+chroma_client = None
+collection = None
 
 try:
   chroma_client = chromadb.PersistentClient(path=CHROMA_DATA_PATH)
   collection = chroma_client.get_or_create_collection(
       name=COLLECTION_NAME, metadata={"hnsw:space": "cosine"}
   )
+  # ÖN ISITMA (WARM-UP): Sunucu uyanır uyanmaz veritabanını tetikliyoruz
+  doc_count = collection.count()
   print(
-      f"--- CHROMA DB BAĞLANTI BAŞARILI. Toplam Belge:"
-      f" {collection.count()} ---"
+      f"--- CHROMA DB BAĞLANTI BAŞARILI. Toplam Belge: {doc_count} (Hazır)"
   )
 except Exception as e:
   print(f"--- CHROMA DB HATA: {str(e)} ---")
