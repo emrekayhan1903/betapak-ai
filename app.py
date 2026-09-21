@@ -44,9 +44,9 @@ def soru_sor(istek: SoruIstegi):
   try:
     context_text = ""
     if collection:
-      # 1. Sorgu metnini Colab'deki ile aynı Gemini embedding modeliyle 3072 boyuta çeviriyoruz
+# 1. Sorgu metnini güncel embedding modeliyle 3072 boyuta çeviriyoruz
       embedding_result = client.models.embed_content(
-          model="text-embedding-004", contents=istek.soru
+          model="text-embedding-005", contents=istek.soru
       )
       query_embedding = embedding_result.embedding.values
 
