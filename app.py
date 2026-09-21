@@ -20,7 +20,7 @@ try:
   print("--- CHROMA DB BAĞLANTI BAŞARILI ---")
   print("Mevcut Koleksiyonlar:", [c.name for c in collections])
 
-  collection = chroma_client.get_or_create_collection("betapak_kilavuzlar")
+  collection = chroma_client.get_or_create_collection("makine_kilavuzlari")
   print("Koleksiyondaki toplam belge sayısı:", collection.count())
 except Exception as e:
   print(f"--- CHROMA DB HATA: {str(e)} ---")
