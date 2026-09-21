@@ -44,8 +44,18 @@ def soru_sor(istek: SoruIstegi):
   try:
     context_text = ""
     if collection:
-      results = collection.query(query_texts=[istek.soru], n_results=3)
-      print("Sorgu Sonucu:", results)  # Render loglarında göreceğiz
+      # 1. Sorgu metnini Colab'deki ile aynı Gemini embedding modeliyle 3072 boyuta çeviriyoruz
+      embedding_result = client.models.embed_content(
+          model="text-embedding-004", contents=istek.soru
+      )
+      query_embedding = embedding_result.embedding.values
+
+      # 2. ChromaDB'de metin yerine doğrudan bu 3072 boyutlu vektörle arama yapıyoruz
+      results = collection.query(
+          query_embeddings=[query_embedding], n_results=3
+      )
+
+      print("Sorgu Sonucu:", results)
       if results and "documents" in results and results["documents"]:
         documents = results["documents"][0]
         if documents:
