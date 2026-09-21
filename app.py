@@ -5,26 +5,52 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from google import genai
 from pydantic import BaseModel
+import requests
 import uvicorn
 
 app = FastAPI(title="BetaPak AI Teknik Asistan")
 
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+# API Anahtarı ve Gemini Client (Cevap üretmek için)
+API_KEY = os.environ.get("GEMINI_API_KEY")
+client = genai.Client(api_key=API_KEY)
 
-# ChromaDB Bağlantısı ve Kontrolü
-db_path = "./chroma_db"
+# ChromaDB Bağlantısı
+CHROMA_DATA_PATH = "./chroma_db"
+COLLECTION_NAME = "makine_kilavuzlari"
+
 try:
-  chroma_client = chromadb.PersistentClient(path=db_path)
-  # Mevcut koleksiyonları listeleyip konsola yazdıralım (Render loglarında göreceğiz)
-  collections = chroma_client.list_collections()
-  print("--- CHROMA DB BAĞLANTI BAŞARILI ---")
-  print("Mevcut Koleksiyonlar:", [c.name for c in collections])
-
-  collection = chroma_client.get_or_create_collection("makine_kilavuzlari")
-  print("Koleksiyondaki toplam belge sayısı:", collection.count())
+  chroma_client = chromadb.PersistentClient(path=CHROMA_DATA_PATH)
+  collection = chroma_client.get_or_create_collection(
+      name=COLLECTION_NAME, metadata={"hnsw:space": "cosine"}
+  )
+  print(
+      f"--- CHROMA DB BAĞLANTI BAŞARILI. Toplam Belge:"
+      f" {collection.count()} ---"
+  )
 except Exception as e:
   print(f"--- CHROMA DB HATA: {str(e)} ---")
   collection = None
+
+
+def gemini_embedding_al(metin):
+  """Colab'de birebir kullandığın ve çalışan HTTP tabanlı embedding fonksiyonu"""
+  try:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={API_KEY}"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "model": "models/gemini-embedding-001",
+        "content": {"parts": [{"text": metin}]},
+    }
+    res = requests.post(url, json=payload, headers=headers, timeout=15)
+
+    if res.status_code == 200:
+      return res.json()["embedding"]["values"]
+    else:
+      print(f"❌ API Embedding Hatası ({res.status_code}): {res.text}")
+      return None
+  except Exception as e:
+    print(f"❌ Bağlantı Hatası: {e}")
+    return None
 
 
 class SoruIstegi(BaseModel):
@@ -44,22 +70,20 @@ def soru_sor(istek: SoruIstegi):
   try:
     context_text = ""
     if collection:
-# 1. Sorgu metnini güncel embedding modeliyle 3072 boyuta çeviriyoruz
-      embedding_result = client.models.embed_content(
-          model="text-embedding-005", contents=istek.soru
-      )
-      query_embedding = embedding_result.embedding.values
+      # 1. Kullanıcının sorusunu Colab ile birebir aynı yöntemle vektöre çeviriyoruz
+      query_vector = gemini_embedding_al(istek.soru)
 
-      # 2. ChromaDB'de metin yerine doğrudan bu 3072 boyutlu vektörle arama yapıyoruz
-      results = collection.query(
-          query_embeddings=[query_embedding], n_results=3
-      )
+      if query_vector:
+        # 2. ChromaDB'de vektör ile arama yapıyoruz
+        results = collection.query(
+            query_embeddings=[query_vector], n_results=3
+        )
+        print("Sorgu Sonucu:", results)
 
-      print("Sorgu Sonucu:", results)
-      if results and "documents" in results and results["documents"]:
-        documents = results["documents"][0]
-        if documents:
-          context_text = "\n\n".join(documents)
+        if results and "documents" in results and results["documents"]:
+          documents = results["documents"][0]
+          if documents:
+            context_text = "\n\n".join(documents)
 
     system_prompt = (
         "Sen BetaPak AI Teknik Destek Asistanısın. Omron ve Weintek sistemleri,"
