@@ -16,16 +16,11 @@ client = genai.Client(api_key=API_KEY)
 CHROMA_DATA_PATH = "./chroma_db"
 COLLECTION_NAME = "makine_kilavuzlari"
 
-# Global değişkenler
-chroma_client = None
-collection = None
-
 try:
   chroma_client = chromadb.PersistentClient(path=CHROMA_DATA_PATH)
   collection = chroma_client.get_or_create_collection(
       name=COLLECTION_NAME, metadata={"hnsw:space": "cosine"}
   )
-  # ÖN ISITMA (WARM-UP): Sunucu uyanır uyanmaz veritabanını tetikliyoruz
   doc_count = collection.count()
   print(
       f"--- CHROMA DB BAĞLANTI BAŞARILI. Toplam Belge: {doc_count} (Hazır)"
@@ -36,7 +31,6 @@ except Exception as e:
 
 
 def gemini_embedding_al(metin):
-  """Colab'de birebir kullandığın ve çalışan HTTP tabanlı embedding fonksiyonu"""
   try:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={API_KEY}"
     headers = {"Content-Type": "application/json"}
@@ -73,15 +67,14 @@ def soru_sor(istek: SoruIstegi):
   try:
     context_text = ""
     if collection:
-      # 1. Kullanıcının sorusunu Colab ile birebir aynı yöntemle vektöre çeviriyoruz
       query_vector = gemini_embedding_al(istek.soru)
 
       if query_vector:
-        # 2. ChromaDB'de vektör ile arama yapıyoruz
+        # Arama kapsamını 5'e çıkarıyoruz ki 12-16. sayfalardaki er13 kaçmasın!
         results = collection.query(
-            query_embeddings=[query_vector], n_results=3
+            query_embeddings=[query_vector], n_results=5
         )
-        print("Sorgu Sonucu:", results)
+        print("Sorgu Sonucu (n=5):", results)
 
         if results and "documents" in results and results["documents"]:
           documents = results["documents"][0]
@@ -111,7 +104,13 @@ def soru_sor(istek: SoruIstegi):
     return {"cevap": response.text}
 
   except Exception as e:
-    raise HTTPException(status_code=500, detail=str(e))
+    print(f"❌ Kritik Hata Yakalandı: {str(e)}")
+    # HTTP 500 patlatmak yerine HMI ekranının okuyabileceği yumuşak bir yanıt dönüyoruz
+    return {
+        "cevap": (
+            "Sunucu anlık yoğunluk yaşadı. Lütfen soruyu tekrar gönderin."
+        )
+    }
 
 
 if __name__ == "__main__":
