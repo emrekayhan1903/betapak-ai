@@ -9,14 +9,21 @@ import uvicorn
 
 app = FastAPI(title="BetaPak AI Teknik Asistan")
 
-# Gemini API ve ChromaDB Bağlantıları
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
+# ChromaDB Bağlantısı ve Kontrolü
 db_path = "./chroma_db"
 try:
   chroma_client = chromadb.PersistentClient(path=db_path)
+  # Mevcut koleksiyonları listeleyip konsola yazdıralım (Render loglarında göreceğiz)
+  collections = chroma_client.list_collections()
+  print("--- CHROMA DB BAĞLANTI BAŞARILI ---")
+  print("Mevcut Koleksiyonlar:", [c.name for c in collections])
+
   collection = chroma_client.get_or_create_collection("betapak_kilavuzlar")
+  print("Koleksiyondaki toplam belge sayısı:", collection.count())
 except Exception as e:
+  print(f"--- CHROMA DB HATA: {str(e)} ---")
   collection = None
 
 
@@ -24,7 +31,6 @@ class SoruIstegi(BaseModel):
   soru: str
 
 
-# Statik dosyaları (HTML/CSS) sunmak için
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -39,6 +45,7 @@ def soru_sor(istek: SoruIstegi):
     context_text = ""
     if collection:
       results = collection.query(query_texts=[istek.soru], n_results=3)
+      print("Sorgu Sonucu:", results)  # Render loglarında göreceğiz
       if results and "documents" in results and results["documents"]:
         documents = results["documents"][0]
         if documents:
@@ -71,4 +78,4 @@ def soru_sor(istek: SoruIstegi):
 
 
 if __name__ == "__main__":
-  uvicorn.run("app:app", host="0.0.0.0", port=7860, reload=False)
+  uvicorn.run("app:app", host="0.0.0.0", port=10000, reload=False)
